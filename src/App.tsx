@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Chapter } from './types';
+import { CamouflageMode } from './types/camouflage';
 import { 
   getChapters, 
   saveChapter, 
@@ -10,6 +11,9 @@ import {
 import { ChapterList } from './components/ChapterList';
 import { Editor } from './components/Editor';
 import { NewChapterModal } from './components/NewChapterModal';
+import { VSCodeEditor } from './components/camouflage/VSCodeEditor';
+import { ConfluenceEditor } from './components/camouflage/ConfluenceEditor';
+import { BossPanicModal } from './components/camouflage/BossPanicModal';
 
 export const App: React.FC = () => {
   const [chapters, setChapters] = useState<Chapter[]>([]);
@@ -20,6 +24,10 @@ export const App: React.FC = () => {
     return localStorage.getItem('gaigao_theme') === 'dark' ||
       (!localStorage.getItem('gaigao_theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
   });
+  const [camouflageMode, setCamouflageMode] = useState<CamouflageMode>(() => {
+    return (localStorage.getItem('gaigao_camouflage') as CamouflageMode) || 'normal';
+  });
+  const [isPanicOpen, setIsPanicOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   // Apply dark mode class to root html element
@@ -33,6 +41,22 @@ export const App: React.FC = () => {
     }
   }, [isDarkMode]);
 
+  // Global Boss Key (ESC) listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsPanicOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const handleSetCamouflageMode = (mode: CamouflageMode) => {
+    setCamouflageMode(mode);
+    localStorage.setItem('gaigao_camouflage', mode);
+  };
+
   // Load chapters & book name on start
   const loadData = async () => {
     try {
@@ -40,8 +64,6 @@ export const App: React.FC = () => {
       const lastBook = await getLastBookName();
       setChapters(loadedChapters);
       if (lastBook) setCurrentBookName(lastBook);
-      
-      // If we only have 1 chapter and it's the demo, or if URL specifies, we can stay on list
     } catch (err) {
       console.error('Failed loading data:', err);
     } finally {
@@ -87,14 +109,50 @@ export const App: React.FC = () => {
     );
   }
 
+  // Render editor according to camouflage mode
+  const renderActiveEditor = (chapter: Chapter) => {
+    if (camouflageMode === 'vscode') {
+      return (
+        <VSCodeEditor
+          chapter={chapter}
+          allChapters={chapters}
+          onSelectChapter={(c) => setActiveChapterId(c.id)}
+          onSaveChapter={handleSaveChapter}
+          onBack={() => setActiveChapterId(null)}
+          onSwitchMode={handleSetCamouflageMode}
+          onTriggerPanic={() => setIsPanicOpen(true)}
+        />
+      );
+    }
+
+    if (camouflageMode === 'confluence') {
+      return (
+        <ConfluenceEditor
+          chapter={chapter}
+          onSaveChapter={handleSaveChapter}
+          onBack={() => setActiveChapterId(null)}
+          onSwitchMode={handleSetCamouflageMode}
+          onTriggerPanic={() => setIsPanicOpen(true)}
+        />
+      );
+    }
+
+    return (
+      <Editor
+        chapter={chapter}
+        onSaveChapter={handleSaveChapter}
+        onBack={() => setActiveChapterId(null)}
+        camouflageMode={camouflageMode}
+        onSelectCamouflageMode={handleSetCamouflageMode}
+        onTriggerPanic={() => setIsPanicOpen(true)}
+      />
+    );
+  };
+
   return (
     <div className="min-h-screen bg-paper-50 dark:bg-paper-900 transition-colors">
       {activeChapter ? (
-        <Editor
-          chapter={activeChapter}
-          onSaveChapter={handleSaveChapter}
-          onBack={() => setActiveChapterId(null)}
-        />
+        renderActiveEditor(activeChapter)
       ) : (
         <ChapterList
           chapters={chapters}
@@ -105,6 +163,9 @@ export const App: React.FC = () => {
           onReload={loadData}
           isDarkMode={isDarkMode}
           onToggleDarkMode={() => setIsDarkMode((prev) => !prev)}
+          camouflageMode={camouflageMode}
+          onSelectCamouflageMode={handleSetCamouflageMode}
+          onTriggerPanic={() => setIsPanicOpen(true)}
         />
       )}
 
@@ -115,6 +176,13 @@ export const App: React.FC = () => {
         defaultBookName={currentBookName}
         onChapterCreated={handleChapterCreated}
       />
+
+      {/* Emergency Boss Key (ESC) Panic Screen */}
+      <BossPanicModal
+        isOpen={isPanicOpen}
+        onClose={() => setIsPanicOpen(false)}
+      />
     </div>
   );
 };
+

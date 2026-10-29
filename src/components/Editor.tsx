@@ -6,6 +6,7 @@ import {
   Copy 
 } from 'lucide-react';
 import { Chapter, Annotation } from '../types';
+import { CamouflageMode } from '../types/camouflage';
 import { computeTextMetrics, getCircledNumber } from '../utils/wordCount';
 import { formatNovelAndRemapAnnotations } from '../utils/novelFormatter';
 import { getSelectionCoordinates, SelectionCoords } from '../utils/selectionPosition';
@@ -13,17 +14,24 @@ import { WordCountModal } from './WordCountModal';
 import { AnnotationSheet } from './AnnotationSheet';
 import { AnnotationListSheet } from './AnnotationListSheet';
 import { ExportModal } from './ExportModal';
+import { ModeSwitcher } from './camouflage/ModeSwitcher';
 
 interface EditorProps {
   chapter: Chapter;
   onSaveChapter: (updated: Chapter) => void;
   onBack: () => void;
+  camouflageMode: CamouflageMode;
+  onSelectCamouflageMode: (mode: CamouflageMode) => void;
+  onTriggerPanic: () => void;
 }
 
 export const Editor: React.FC<EditorProps> = ({
   chapter,
   onSaveChapter,
   onBack,
+  camouflageMode,
+  onSelectCamouflageMode,
+  onTriggerPanic,
 }) => {
   const [content, setContent] = useState(chapter.content);
   const [title, setTitle] = useState(chapter.title);
@@ -332,15 +340,59 @@ export const Editor: React.FC<EditorProps> = ({
       const highlightedText = content.substring(ann.startIndex, ann.endIndex);
       const circleNumber = getCircledNumber(ann.index);
 
+      // ZERO layout-width addition: mark has 0 margin, 0 padding, 0 border.
+      // Badge has 0 width and 0 height so it NEVER pushes subsequent text by even 1 pixel!
       segments.push(
         <mark
           key={`mark-${ann.id}`}
-          className="annotation-highlight group relative bg-amber-200/60 dark:bg-amber-500/30 text-transparent rounded px-0.5 border-b-2 border-amber-400 dark:border-amber-500 transition-colors"
-          data-badge={circleNumber}
+          className="annotation-highlight"
+          style={{
+            backgroundColor: 'rgba(245, 158, 11, 0.32)',
+            color: 'transparent',
+            margin: 0,
+            padding: 0,
+            border: 'none',
+            borderBottom: '2px solid #f59e0b',
+            position: 'relative',
+            borderRadius: 0,
+          }}
         >
           {highlightedText}
-          <span className="inline-flex items-center justify-center font-sans font-bold text-[11px] leading-none ml-0.5 px-1 py-0.5 rounded-full bg-amber-500 text-white select-none shadow-sm align-super">
-            {circleNumber}
+          <span
+            style={{
+              position: 'absolute',
+              right: 0,
+              top: '-0.55em',
+              width: 0,
+              height: 0,
+              overflow: 'visible',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              pointerEvents: 'none',
+              userSelect: 'none',
+            }}
+          >
+            <span
+              style={{
+                transform: 'translate(50%, 0)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: '#f59e0b',
+                color: '#ffffff',
+                fontSize: '11px',
+                fontWeight: 700,
+                lineHeight: 1,
+                padding: '2px 5px',
+                borderRadius: '9999px',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {circleNumber}
+            </span>
           </span>
         </mark>
       );
@@ -415,6 +467,13 @@ export const Editor: React.FC<EditorProps> = ({
 
         {/* Header Right Actions */}
         <div className="flex items-center gap-1.5 shrink-0 ml-2">
+          {/* Mode Switcher (Camouflage / Disguise) */}
+          <ModeSwitcher
+            currentMode={camouflageMode}
+            onSelectMode={onSelectCamouflageMode}
+            onTriggerPanic={onTriggerPanic}
+          />
+
           {/* Word Count Pill (Reference VMark) */}
           <button
             type="button"
@@ -440,20 +499,22 @@ export const Editor: React.FC<EditorProps> = ({
         </div>
       </header>
 
-      {/* Editor Main Canvas (Textarea + Shadow Layer) */}
+      {/* Editor Main Canvas (Textarea + Shadow Layer with 1:1 Pixel Alignment) */}
       <div className="relative flex-1 w-full max-w-3xl mx-auto overflow-hidden">
         {/* Shadow Highlight Backdrop */}
         <div
           ref={backdropRef}
           aria-hidden="true"
-          className="absolute inset-0 px-5 py-6 overflow-y-auto whitespace-pre-wrap break-words pointer-events-none font-serif text-[17px] leading-[1.85] text-transparent select-none"
+          className="absolute inset-0 px-5 pt-6 pb-44 overflow-y-auto whitespace-pre-wrap pointer-events-none text-[17px] leading-[1.85] text-transparent select-none box-border"
           style={{
-            fontFamily: '"Songti SC", "Source Han Serif SC", "Noto Serif CJK SC", STSong, Georgia, serif',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+            wordBreak: 'break-all',
+            overflowWrap: 'break-word',
+            letterSpacing: '0px',
+            WebkitTextSizeAdjust: '100%',
           }}
         >
           {backdropElements}
-          {/* Extra bottom padding so mobile keyboard won't hide bottom lines */}
-          <div className="h-44" />
         </div>
 
         {/* Real Transparent Editable Textarea */}
@@ -465,9 +526,13 @@ export const Editor: React.FC<EditorProps> = ({
           onScroll={handleScroll}
           placeholder="在此处直接输入或修改正文..."
           spellCheck={false}
-          className="relative z-10 w-full h-full px-5 py-6 bg-transparent resize-none focus:outline-none font-serif text-[17px] leading-[1.85] text-slate-900 dark:text-slate-100 caret-orange-500 placeholder-slate-400/50"
+          className="relative z-10 w-full h-full px-5 pt-6 pb-44 bg-transparent resize-none focus:outline-none text-[17px] leading-[1.85] text-slate-900 dark:text-slate-100 caret-orange-500 placeholder-slate-400/50 box-border"
           style={{
-            fontFamily: '"Songti SC", "Source Han Serif SC", "Noto Serif CJK SC", STSong, Georgia, serif',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+            wordBreak: 'break-all',
+            overflowWrap: 'break-word',
+            letterSpacing: '0px',
+            WebkitTextSizeAdjust: '100%',
           }}
         />
       </div>

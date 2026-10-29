@@ -14,8 +14,10 @@ import {
   MessageSquare
 } from 'lucide-react';
 import { Chapter } from '../types';
+import { CamouflageMode } from '../types/camouflage';
 import { computeTextMetrics } from '../utils/wordCount';
 import { exportAllData, importData } from '../services/storage';
+import { ModeSwitcher } from './camouflage/ModeSwitcher';
 
 interface ChapterListProps {
   chapters: Chapter[];
@@ -26,6 +28,9 @@ interface ChapterListProps {
   onReload: () => void;
   isDarkMode: boolean;
   onToggleDarkMode: () => void;
+  camouflageMode: CamouflageMode;
+  onSelectCamouflageMode: (mode: CamouflageMode) => void;
+  onTriggerPanic: () => void;
 }
 
 export const ChapterList: React.FC<ChapterListProps> = ({
@@ -37,6 +42,9 @@ export const ChapterList: React.FC<ChapterListProps> = ({
   onReload,
   isDarkMode,
   onToggleDarkMode,
+  camouflageMode,
+  onSelectCamouflageMode,
+  onTriggerPanic,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -102,6 +110,11 @@ export const ChapterList: React.FC<ChapterListProps> = ({
           </div>
 
           <div className="flex items-center gap-1.5">
+            <ModeSwitcher
+              currentMode={camouflageMode}
+              onSelectMode={onSelectCamouflageMode}
+              onTriggerPanic={onTriggerPanic}
+            />
             <button
               onClick={onToggleDarkMode}
               className="p-2 rounded-xl text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-paper-800 transition"
