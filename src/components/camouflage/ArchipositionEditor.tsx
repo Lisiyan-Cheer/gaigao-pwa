@@ -8,7 +8,6 @@ import {
   Share2, 
   Bookmark, 
   Heart, 
-  Type,
   Plus
 } from 'lucide-react';
 import { Chapter, Annotation } from '../../types';
@@ -101,14 +100,13 @@ function splitContentIntoBlocks(content: string, paragraphsPerBlock = 3): TextBl
   return blocks;
 }
 
-// Auto-resizing borderless textarea component matching printed typography
+// Auto-resizing borderless textarea component matching modern web sans-serif (黑体) typography
 const AutoResizeTextarea: React.FC<{
   value: string;
   onChange: (val: string) => void;
   onSelect: (e: React.SyntheticEvent<HTMLTextAreaElement>) => void;
-  fontFamily: 'serif' | 'sans';
   placeholder?: string;
-}> = ({ value, onChange, onSelect, fontFamily, placeholder }) => {
+}> = ({ value, onChange, onSelect, placeholder }) => {
   const ref = useRef<HTMLTextAreaElement>(null);
 
   const resize = () => {
@@ -120,7 +118,7 @@ const AutoResizeTextarea: React.FC<{
 
   useEffect(() => {
     resize();
-  }, [value, fontFamily]);
+  }, [value]);
 
   return (
     <textarea
@@ -131,16 +129,13 @@ const AutoResizeTextarea: React.FC<{
         resize();
       }}
       onSelect={onSelect}
-      placeholder={placeholder || '在此段落直接输入文字说明或修改...'}
+      placeholder={placeholder || '在此直接输入或编辑文字说明...'}
       spellCheck={false}
       rows={Math.max(2, value.split('\n').length)}
-      className="w-full bg-transparent border-0 outline-none resize-none p-0 m-0 text-base sm:text-[17px] leading-[2.3] text-[#2c2b28] placeholder-stone-300 selection:bg-amber-200/50 overflow-hidden"
+      className="w-full bg-transparent border-0 outline-none resize-none p-0 m-0 text-[15px] sm:text-base leading-[2.1] text-[#2c2b28] font-sans placeholder-stone-300 selection:bg-[#0084c8]/20 overflow-hidden"
       style={{
-        fontFamily:
-          fontFamily === 'serif'
-            ? '"Source Han Serif SC", "Noto Serif CJK SC", "Songti SC", SimSun, Georgia, serif'
-            : '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif',
-        letterSpacing: '0.02em',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "WenQuanYi Micro Hei", sans-serif',
+        letterSpacing: '0.01em',
       }}
     />
   );
@@ -158,7 +153,6 @@ export const ArchipositionEditor: React.FC<ArchipositionEditorProps> = ({
   const [content, setContent] = useState(chapter.content);
   const [annotations, setAnnotations] = useState<Annotation[]>(chapter.annotations || []);
   const [blocks, setBlocks] = useState<TextBlock[]>(() => splitContentIntoBlocks(chapter.content));
-  const [fontFamily, setFontFamily] = useState<'serif' | 'sans'>('serif');
 
   // History Stack (返回 / 前进)
   const { pushSnapshot, undo, redo, canUndo, canRedo } = useHistory(
@@ -383,10 +377,10 @@ export const ArchipositionEditor: React.FC<ArchipositionEditorProps> = ({
               className="flex items-center gap-2 cursor-pointer select-none group"
               title="有方空间 archiposition.com"
             >
-              <div className="w-6 h-6 bg-[#d9231f] flex items-center justify-center text-white font-serif font-black text-xs rounded-sm shadow-sm group-hover:opacity-90">
+              <div className="w-6 h-6 bg-[#d9231f] flex items-center justify-center text-white font-sans font-bold text-xs rounded-sm shadow-sm group-hover:opacity-90">
                 方
               </div>
-              <span className="font-serif font-bold text-xl tracking-tight text-[#1a1a1a]">
+              <span className="font-sans font-bold text-xl tracking-tight text-[#1a1a1a]">
                 有方
               </span>
               <span className="hidden sm:inline font-sans text-[11px] text-[#999] tracking-wider uppercase pl-1 border-l border-stone-200">
@@ -461,7 +455,7 @@ export const ArchipositionEditor: React.FC<ArchipositionEditorProps> = ({
 
         {/* Project Article Title & Minimalist Editorial Utility Bar */}
         <div className="space-y-4 pb-4 border-b border-[#e8e4de]">
-          <h1 className="text-2xl sm:text-3xl lg:text-[34px] font-bold text-[#111111] leading-tight font-serif tracking-tight">
+          <h1 className="text-2xl sm:text-3xl lg:text-[32px] font-bold text-[#111111] leading-tight font-sans tracking-tight">
             JJP新作：织两片纱网，普洛斯湾区西部智慧产业园-A16
           </h1>
           <p className="text-sm sm:text-base text-[#666666] leading-relaxed">
@@ -542,16 +536,6 @@ export const ArchipositionEditor: React.FC<ArchipositionEditorProps> = ({
                 <Copy className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">导出指令</span>
               </button>
-
-              {/* Font Serif / Sans */}
-              <button
-                type="button"
-                onClick={() => setFontFamily((prev) => (prev === 'serif' ? 'sans' : 'serif'))}
-                className="p-1 text-stone-500 hover:text-stone-900 rounded transition"
-                title={`切换排印字体（当前：${fontFamily === 'serif' ? '宋体' : '黑体'}）`}
-              >
-                <Type className="w-3.5 h-3.5" />
-              </button>
             </div>
 
             {/* Right: Social Actions */}
@@ -585,7 +569,7 @@ export const ArchipositionEditor: React.FC<ArchipositionEditorProps> = ({
         </div>
 
         {/* Lead Editorial Paragraph */}
-        <div className="prose prose-stone max-w-none text-base leading-[2.2] text-[#333333] space-y-4 font-serif">
+        <div className="prose prose-stone max-w-none text-base leading-[2.1] text-[#333333] space-y-4 font-sans">
           <p className="indent-8">
             在现代工业物流领域，空间通常围绕“高周转与效率”展开组织，仓储、分拣、运输与调度环环相扣，建筑的衡量标准长期停留在流线最短化与坪效最大化。然而，随着全球现代产业竞争从基础产能向人才、研发、人文关怀与社群链接拓展，工业与产业园区建筑逐渐展现出更深远的社会属性。
           </p>
@@ -602,7 +586,7 @@ export const ArchipositionEditor: React.FC<ArchipositionEditorProps> = ({
             const photo = ARCH_PHOTOS[idx % ARCH_PHOTOS.length];
 
             return (
-              <div key={block.id} className="space-y-6">
+              <div key={block.id} className="space-y-5">
                 {/* Architectural Photo & Drawing (Interleaved) */}
                 <figure className="space-y-2">
                   <div className="rounded-lg overflow-hidden border border-[#e5e1dc] bg-stone-100 shadow-sm">
@@ -613,13 +597,13 @@ export const ArchipositionEditor: React.FC<ArchipositionEditorProps> = ({
                       className="w-full h-auto object-cover max-h-[560px]"
                     />
                   </div>
-                  <figcaption className="text-xs text-[#888888] text-center font-serif">
+                  <figcaption className="text-xs text-[#888888] text-center font-sans">
                     {photo.caption}
                   </figcaption>
                 </figure>
 
                 {/* Subtitle for the section (融入空间推演叙事) */}
-                <div className="flex items-center justify-between text-xs text-[#777] border-b border-stone-200/60 pb-1.5 font-serif">
+                <div className="flex items-center justify-between text-xs text-[#777] border-b border-stone-200/60 pb-1.5 font-sans">
                   <span className="font-bold text-stone-800 tracking-wide">
                     空间叙事场景推演与设计说明（片段 0{idx + 1}）
                   </span>
@@ -640,7 +624,6 @@ export const ArchipositionEditor: React.FC<ArchipositionEditorProps> = ({
                     value={block.text}
                     onChange={(newVal) => handleBlockChange(block.id, newVal)}
                     onSelect={(e) => handleBlockSelect(idx, e)}
-                    fontFamily={fontFamily}
                     placeholder={`在此直接输入或编辑第 ${idx + 1} 节设计说明...`}
                   />
 
@@ -684,15 +667,15 @@ export const ArchipositionEditor: React.FC<ArchipositionEditorProps> = ({
       <footer className="mt-16 border-t border-[#e5e1dc] bg-white py-10 text-xs text-[#777]">
         <div className="max-w-[1060px] mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-4">
-            <div className="w-5 h-5 bg-[#d9231f] flex items-center justify-center text-white font-serif font-black text-[10px] rounded-sm">
+            <div className="w-5 h-5 bg-[#d9231f] flex items-center justify-center text-white font-sans font-bold text-[10px] rounded-sm">
               方
             </div>
-            <span className="font-serif font-bold text-lg text-[#222]">有方空间</span>
-            <span className="text-[#999] hidden sm:inline">
+            <span className="font-sans font-bold text-lg text-[#222]">有方空间</span>
+            <span className="text-[#999] hidden sm:inline font-sans">
               archiposition.com · 专注高品质建筑文化传播与学术策划
             </span>
           </div>
-          <div className="text-center md:text-right text-[11px] text-[#999] space-y-1">
+          <div className="text-center md:text-right text-[11px] text-[#999] space-y-1 font-sans">
             <div>关于有方 | 投稿指南 | 广告与赞助 | 招聘信息 | 版权申明</div>
             <div>Copyright © 2013-2026 有方空间 archiposition.com All Rights Reserved. 粤ICP备13028249号</div>
           </div>
