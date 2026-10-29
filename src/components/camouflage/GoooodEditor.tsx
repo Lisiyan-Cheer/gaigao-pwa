@@ -10,6 +10,7 @@ import {
   Redo2
 } from 'lucide-react';
 import { Chapter, Annotation } from '../../types';
+import { CamouflageMode } from '../../types/camouflage';
 import { computeTextMetrics } from '../../utils/wordCount';
 import { formatNovelAndRemapAnnotations } from '../../utils/novelFormatter';
 import { useHistory } from '../../utils/useHistory';
@@ -24,9 +25,163 @@ interface GoooodEditorProps {
   onSelectChapter: (chapter: Chapter) => void;
   onSaveChapter: (updated: Chapter) => void;
   onBack: () => void;
-  onSwitchMode: (mode: 'normal' | 'gooood') => void;
+  onSwitchMode: (mode: CamouflageMode) => void;
   onTriggerPanic: () => void;
 }
+
+interface GoooodArticle {
+  id: string;
+  title: string;
+  subtitle: string;
+  kicker: string;
+  category: string;
+  img: string;
+  date: string;
+  location: string;
+}
+
+const GOOOOD_ARTICLES: GoooodArticle[] = [
+  {
+    id: 'art-1',
+    title: '校园里的迴转山谷：溧阳六中二期建设工程，江苏 / 东南大学建筑设计研究院ATA工作室',
+    subtitle: '老围墙外生长出的“迴转山谷”，连接新旧校园与城市公共界面',
+    kicker: '建筑 / 校园营造',
+    category: '建筑',
+    img: 'https://oss.gooood.cn/uploads/2026/10/00-gooood-interview-Yang-Dingliang%E7%9A%84%E5%89%AF%E6%9C%AC_%E5%89%AF%E6%9C%AC-gsj-472x303.png',
+    date: '2026.10.29',
+    location: '江苏 · 溧阳',
+  },
+  {
+    id: 'art-2',
+    title: '中关村高端医疗器械产业园（二期），北京 / 北京市工业设计研究院有限公司',
+    subtitle: '“模数建构”与“园院共构”相生，打造现代研发生态聚落',
+    kicker: '建筑 / 产业园区',
+    category: '建筑',
+    img: 'https://oss.gooood.cn/uploads/2026/10/01-aah-472x303.jpg',
+    date: '2026.10.29',
+    location: '北京 · 大兴',
+  },
+  {
+    id: 'art-3',
+    title: 'BIG主导设计的美国六月节国家博物馆建设迎来重要进展',
+    subtitle: '迈向更加公正未来的愿景，折板屋面与公共漫游动线贯通城市',
+    kicker: '建筑 / 文化博览',
+    category: '建筑',
+    img: 'https://oss.gooood.cn/uploads/2026/10/001-ixz-472x303.jpg',
+    date: '2026.10.29',
+    location: '美国 · 沃斯堡',
+  },
+  {
+    id: 'art-4',
+    title: 'PRISMA新嘉中心景观设计，上海 / PLAND博度景观设计',
+    subtitle: '在43万平方米商业体脚下铺开柔软地表，消解生硬边界与高差',
+    kicker: '景观 / 城市公共空间',
+    category: '景观',
+    img: 'https://oss.gooood.cn/uploads/2026/10/00-gooood-interview-Yang-Dingliang%E7%9A%84%E5%89%AF%E6%9C%AC_%E5%89%AF%E6%9C%AC-dcc-472x303.png',
+    date: '2026.10.29',
+    location: '上海 · 嘉定',
+  },
+  {
+    id: 'art-5',
+    title: '寿城延绵数字媒体艺术馆，韩国 / 奥雷·舍人事务所',
+    subtitle: '从自然景观渐变至数字世界，多维立体的流线编织公共艺术漫游',
+    kicker: '建筑 / 艺术空间',
+    category: '建筑',
+    img: 'https://oss.gooood.cn/uploads/2026/10/00-gooood-interview-Yang-Dingliang%E7%9A%84%E5%89%AF%E6%9C%AC_%E5%89%AF%E6%9C%AC-30m-472x303.png',
+    date: '2026.10.29',
+    location: '韩国 · 大邱',
+  },
+  {
+    id: 'art-6',
+    title: '毕尔巴鄂巴斯克博物馆改造，西班牙 / VAILLO + ARCHITECTS',
+    subtitle: '让历史建筑群重获整体性，当代材料与古老夯土砖石的深层对话',
+    kicker: '改造 / 历史建筑',
+    category: '改造',
+    img: 'https://oss.gooood.cn/uploads/2026/10/002-472x303.jpg',
+    date: '2026.10.29',
+    location: '西班牙 · 毕尔巴鄂',
+  },
+  {
+    id: 'art-7',
+    title: '西日の長屋，札幌 / Yoshichika Takagi',
+    subtitle: '金色与深海般的暮色，极简木构长屋的自然天光与庭院诗篇',
+    kicker: '建筑 / 居住空间',
+    category: '建筑',
+    img: 'https://oss.gooood.cn/uploads/2026/10/nishihi-nagaya-cover-472x303.jpg',
+    date: '2026.10.29',
+    location: '日本 · 札幌',
+  },
+  {
+    id: 'art-8',
+    title: 'SIMOSE美术馆与旅馆，广岛 / 坂茂建築設計',
+    subtitle: '漂浮于濑户内海畔的八个彩色可移动玻璃展厅与纸筒结构',
+    kicker: '建筑 / 美术馆',
+    category: '建筑',
+    img: 'https://oss.gooood.cn/uploads/2026/10/2-y9j-472x303.jpg',
+    date: '2026.10.29',
+    location: '日本 · 广岛',
+  },
+  {
+    id: 'art-9',
+    title: '《Building》公共艺术装置，杭州 / 大星吉子工作室',
+    subtitle: '模块化单元的建构游戏，激发市民互动探索与光影捕捉',
+    kicker: '艺术 / 空间装置',
+    category: '艺术',
+    img: 'https://oss.gooood.cn/uploads/2026/10/bdj-cover-472x303.jpg',
+    date: '2026.10.28',
+    location: '浙江 · 杭州',
+  },
+  {
+    id: 'art-10',
+    title: '桐庐十二拱堂，杭州 / SpActrum谱观',
+    subtitle: '拱，作为去古典化的“社会雕塑”与乡野社区精神容器',
+    kicker: '建筑 / 乡村营造',
+    category: '乡村',
+    img: 'https://oss.gooood.cn/uploads/2026/10/01-ntz-472x303.jpg',
+    date: '2026.10.28',
+    location: '浙江 · 桐庐',
+  },
+  {
+    id: 'art-11',
+    title: 'KŌNG胶东小馆，北京 / odd设计事务所',
+    subtitle: '营造“渔舟灯火”的悠然意境与暖调红砖沉浸体验',
+    kicker: '室内 / 餐饮空间',
+    category: '室内',
+    img: 'https://oss.gooood.cn/uploads/2026/10/00-gooood-interview-Yang-Dingliang%E7%9A%84%E5%89%AF%E6%9C%AC_%E5%89%AF%E6%9C%AC-xvp-472x303.png',
+    date: '2026.10.28',
+    location: '北京 · 朝阳',
+  },
+  {
+    id: 'art-12',
+    title: '赤坂GREEN CROSS，东京 / 日建设计',
+    subtitle: '拥有开放型绿色公共中庭与立体连廊的超高层都市综合体',
+    kicker: '建筑 / 综合办公',
+    category: '建筑',
+    img: 'https://oss.gooood.cn/uploads/2026/10/00-gooood-interview-Yang-Dingliang%E7%9A%84%E5%89%AF%E6%9C%AC_%E5%89%AF%E6%9C%AC-jjy-472x303.png',
+    date: '2026.10.28',
+    location: '日本 · 东京',
+  },
+  {
+    id: 'art-13',
+    title: '单农苏州仓街店，苏州 / 亘建筑事务所',
+    subtitle: '从衣服与身体的接触出发，探索微水泥与柔光界面的共生',
+    kicker: '室内 / 商业零售',
+    category: '室内',
+    img: 'https://oss.gooood.cn/uploads/2026/10/2-bpj-472x303.jpg',
+    date: '2026.10.28',
+    location: '江苏 · 苏州',
+  },
+  {
+    id: 'art-14',
+    title: '大乐之野 · 松阳 + 小后青山客栈，浙江 / 空间营造建筑事务所',
+    subtitle: '夯土、青石与老木梁的再造，唤醒浙南深山古村落的诗意隐居',
+    kicker: '建筑 / 民宿酒店',
+    category: '乡村',
+    img: 'https://oss.gooood.cn/uploads/2026/04/odd-ppt-拷贝.jpg',
+    date: '2026.10.28',
+    location: '浙江 · 丽水',
+  },
+];
 
 export const GoooodEditor: React.FC<GoooodEditorProps> = ({
   chapter,
@@ -40,6 +195,15 @@ export const GoooodEditor: React.FC<GoooodEditorProps> = ({
   const [content, setContent] = useState(chapter.content);
   const [annotations, setAnnotations] = useState<Annotation[]>(chapter.annotations || []);
   const [sidebarWidth, setSidebarWidth] = useState<'normal' | 'wide' | 'ultra'>('wide');
+  const [selectedCategory, setSelectedCategory] = useState('全部');
+
+  const displayedArticles = useMemo(() => {
+    if (selectedCategory === '全部') return GOOOOD_ARTICLES;
+    const filtered = GOOOOD_ARTICLES.filter(
+      (a) => a.category === selectedCategory || a.kicker.includes(selectedCategory)
+    );
+    return filtered.length > 0 ? filtered : GOOOOD_ARTICLES;
+  }, [selectedCategory]);
 
   // History Stack (返回 / 前进)
   const { pushSnapshot, undo, redo, canUndo, canRedo } = useHistory(
@@ -262,9 +426,17 @@ export const GoooodEditor: React.FC<GoooodEditorProps> = ({
               </button>
               <button
                 type="button"
+                onClick={() => onSwitchMode('archiposition')}
+                className="px-2 py-1 rounded bg-stone-100 hover:bg-stone-200 text-stone-800 font-medium text-xs border border-stone-300 transition hidden sm:inline"
+                title="切换为有方建筑项目正文模式（夹在项目正文图文中）"
+              >
+                🏛️ 有方正文版
+              </button>
+              <button
+                type="button"
                 onClick={onTriggerPanic}
                 className="px-2 py-1 rounded bg-rose-50 hover:bg-rose-100 text-rose-600 font-medium text-xs border border-rose-200 transition"
-                title="紧急老板键：一键黑屏编译终端 (快捷键 ESC)"
+                title="紧急老板键：一键遮罩为客栈案例 (快捷键 ESC)"
               >
                 🚨 老板键 (ESC)
               </button>
@@ -332,66 +504,80 @@ export const GoooodEditor: React.FC<GoooodEditorProps> = ({
             <span className="text-[#0084c8] cursor-pointer shrink-0">所有工作 →</span>
           </div>
 
-          {/* Architecture Articles Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            {/* Card 1 */}
-            <article className="border border-[#e7edf2] bg-white rounded-lg overflow-hidden hover:shadow-md transition">
-              <div className="h-48 bg-slate-200 relative overflow-hidden">
-                <img 
-                  src="https://oss.gooood.cn/uploads/2026/10/00-gooood-interview-Yang-Dingliang%E7%9A%84%E5%89%AF%E6%9C%AC_%E5%89%AF%E6%9C%AC-gsj-472x303.png" 
-                  alt="CAA建筑事务所" 
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    // Fallback visual if offline
-                    (e.target as HTMLElement).style.display = 'none';
-                  }}
-                />
-                <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/60 text-white text-[10px] font-medium backdrop-blur-sm">
-                  建筑设计 / 专访
-                </div>
-              </div>
-              <div className="p-3.5 space-y-1.5">
-                <h3 className="font-bold text-sm text-[#222] hover:text-[#0084c8] cursor-pointer line-clamp-1">
-                  大乐之野 · 松阳 + 小后青山客栈改造 / 空间营造
-                </h3>
-                <p className="text-xs text-[#777] line-clamp-2 leading-relaxed">
-                  隐匿于浙南深山古村落，以就地取材的夯土与老木材，重构现代旅人的乡野精神避风港。
-                </p>
-                <div className="text-[11px] text-[#999] pt-1 border-t border-[#f0f3f6] flex justify-between">
-                  <span>浙江 · 松阳</span>
-                  <span>2026-10-28</span>
-                </div>
-              </div>
-            </article>
+          {/* Category Filter Tabs */}
+          <div className="flex items-center justify-between border-b border-[#e7edf2] pb-2 text-xs">
+            <div className="flex items-center gap-3 sm:gap-4 overflow-x-auto no-scrollbar font-medium text-[#556677]">
+              {['全部', '建筑', '景观', '室内', '改造', '乡村', '艺术'].map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`pb-1 transition whitespace-nowrap cursor-pointer ${
+                    selectedCategory === cat
+                      ? 'text-[#0084c8] font-bold border-b-2 border-[#0084c8]'
+                      : 'hover:text-[#0084c8]'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+            <div className="text-[11px] text-[#8899aa] shrink-0 hidden sm:block">
+              共 1,842 个精选建成项目
+            </div>
+          </div>
 
-            {/* Card 2 */}
-            <article className="border border-[#e7edf2] bg-white rounded-lg overflow-hidden hover:shadow-md transition">
-              <div className="h-48 bg-slate-200 relative overflow-hidden">
-                <img 
-                  src="https://oss.gooood.cn/uploads/2026/04/odd-ppt-拷贝.jpg" 
-                  alt="商业空间" 
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    (e.target as HTMLElement).style.display = 'none';
-                  }}
-                />
-                <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/60 text-white text-[10px] font-medium backdrop-blur-sm">
-                  商业空间 / 改造
+          {/* Architecture Articles Grid (Rich & Fully Populated) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            {displayedArticles.map((art) => (
+              <article 
+                key={art.id}
+                className="border border-[#e7edf2] bg-white rounded-lg overflow-hidden hover:shadow-md transition flex flex-col justify-between"
+              >
+                <div>
+                  <div className="h-44 bg-slate-100 relative overflow-hidden group">
+                    <img 
+                      src={art.img} 
+                      alt={art.title} 
+                      loading="lazy"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      onError={(e) => {
+                        (e.target as HTMLElement).style.display = 'none';
+                      }}
+                    />
+                    <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/65 text-white text-[10px] font-medium backdrop-blur-sm">
+                      {art.kicker}
+                    </div>
+                  </div>
+                  <div className="p-3.5 space-y-1.5">
+                    <h3 className="font-bold text-sm text-[#222] hover:text-[#0084c8] cursor-pointer line-clamp-1 leading-snug">
+                      {art.title}
+                    </h3>
+                    <p className="text-xs text-[#777] line-clamp-2 leading-relaxed">
+                      {art.subtitle}
+                    </p>
+                  </div>
                 </div>
-              </div>
-              <div className="p-3.5 space-y-1.5">
-                <h3 className="font-bold text-sm text-[#222] hover:text-[#0084c8] cursor-pointer line-clamp-1">
-                  北京1733商业空间提升 / 拾集建筑
-                </h3>
-                <p className="text-xs text-[#777] line-clamp-2 leading-relaxed">
-                  打破传统地下商业沉闷格局，将天光、微地形与退台花园引入公共漫游走廊。
-                </p>
-                <div className="text-[11px] text-[#999] pt-1 border-t border-[#f0f3f6] flex justify-between">
-                  <span>北京 · 海淀</span>
-                  <span>2026-10-27</span>
+                <div className="px-3.5 pb-3 text-[11px] text-[#999] pt-1.5 border-t border-[#f0f3f6] flex justify-between items-center">
+                  <span>{art.location}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[#bbb]">{art.date}</span>
+                    <span className="hover:text-[#0084c8] cursor-pointer">收藏</span>
+                  </div>
                 </div>
-              </div>
-            </article>
+              </article>
+            ))}
+          </div>
+
+          {/* Pagination */}
+          <div className="flex items-center justify-center gap-1.5 pt-4 pb-6 text-xs font-medium text-[#556677]">
+            <span className="px-2.5 py-1 rounded border border-[#dce5ed] bg-white text-[#bbb] cursor-not-allowed">«</span>
+            <span className="px-3 py-1 rounded bg-[#0084c8] text-white font-bold">1</span>
+            <span className="px-3 py-1 rounded border border-[#dce5ed] bg-white hover:bg-[#f0f6fa] hover:text-[#0084c8] cursor-pointer">2</span>
+            <span className="px-3 py-1 rounded border border-[#dce5ed] bg-white hover:bg-[#f0f6fa] hover:text-[#0084c8] cursor-pointer">3</span>
+            <span className="px-2 py-1 text-[#aaa]">...</span>
+            <span className="px-3 py-1 rounded border border-[#dce5ed] bg-white hover:bg-[#f0f6fa] hover:text-[#0084c8] cursor-pointer">48</span>
+            <span className="px-2.5 py-1 rounded border border-[#dce5ed] bg-white hover:bg-[#f0f6fa] hover:text-[#0084c8] cursor-pointer">»</span>
           </div>
         </section>
 
@@ -619,6 +805,22 @@ export const GoooodEditor: React.FC<GoooodEditorProps> = ({
           </div>
         </aside>
       </main>
+
+      {/* 4. gooood.cn Authentic Footer */}
+      <footer className="mt-12 border-t border-[#e1e9ef] bg-white py-8 text-xs text-[#778899]">
+        <div className="max-w-[1360px] mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-6">
+            <span className="text-[#0084c8] font-bold text-2xl tracking-tighter">gooood</span>
+            <span className="hidden sm:inline text-xs text-[#8899aa]">
+              关于谷德 | 投稿与推广 | 购买招聘 | 法律声明 | 隐私政策 | 联系我们
+            </span>
+          </div>
+          <div className="text-center md:text-right text-[11px] text-[#99aabb]">
+            <div>Copyright © 2010-2026 gooood.cn 谷德设计网 All Rights Reserved.</div>
+            <div>京ICP备12015099号-1 · 建筑·景观·室内·艺术·设计媒体</div>
+          </div>
+        </div>
+      </footer>
 
       {/* ============================================================== */}
       {/* 3. Modals & Sheets (Functional Guarantee)                      */}

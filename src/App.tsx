@@ -12,6 +12,7 @@ import { ChapterList } from './components/ChapterList';
 import { Editor } from './components/Editor';
 import { NewChapterModal } from './components/NewChapterModal';
 import { GoooodEditor } from './components/camouflage/GoooodEditor';
+import { ArchipositionEditor } from './components/camouflage/ArchipositionEditor';
 import { BossPanicModal } from './components/camouflage/BossPanicModal';
 
 export const App: React.FC = () => {
@@ -26,9 +27,9 @@ export const App: React.FC = () => {
   const [camouflageMode, setCamouflageMode] = useState<CamouflageMode>(() => {
     const saved = localStorage.getItem('gaigao_camouflage') as CamouflageMode;
     if (saved) return saved;
-    // Default to gooood on desktop wide screens, normal on mobile
+    // Default to archiposition (in-article sandwich) on desktop wide screens, normal on mobile
     if (typeof window !== 'undefined' && window.innerWidth >= 1024) {
-      return 'gooood';
+      return 'archiposition';
     }
     return 'normal';
   });
@@ -116,6 +117,20 @@ export const App: React.FC = () => {
 
   // Render editor according to camouflage mode
   const renderActiveEditor = (chapter: Chapter) => {
+    if (camouflageMode === 'archiposition') {
+      return (
+        <ArchipositionEditor
+          chapter={chapter}
+          allChapters={chapters}
+          onSelectChapter={(c) => setActiveChapterId(c.id)}
+          onSaveChapter={handleSaveChapter}
+          onBack={() => setActiveChapterId(null)}
+          onSwitchMode={handleSetCamouflageMode}
+          onTriggerPanic={() => setIsPanicOpen(true)}
+        />
+      );
+    }
+
     if (camouflageMode === 'gooood') {
       return (
         <GoooodEditor
