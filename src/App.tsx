@@ -13,6 +13,7 @@ import { Editor } from './components/Editor';
 import { NewChapterModal } from './components/NewChapterModal';
 import { VSCodeEditor } from './components/camouflage/VSCodeEditor';
 import { ConfluenceEditor } from './components/camouflage/ConfluenceEditor';
+import { GoooodEditor } from './components/camouflage/GoooodEditor';
 import { BossPanicModal } from './components/camouflage/BossPanicModal';
 
 export const App: React.FC = () => {
@@ -25,7 +26,13 @@ export const App: React.FC = () => {
       (!localStorage.getItem('gaigao_theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
   });
   const [camouflageMode, setCamouflageMode] = useState<CamouflageMode>(() => {
-    return (localStorage.getItem('gaigao_camouflage') as CamouflageMode) || 'normal';
+    const saved = localStorage.getItem('gaigao_camouflage') as CamouflageMode;
+    if (saved) return saved;
+    // Default to gooood on desktop wide screens, normal on mobile
+    if (typeof window !== 'undefined' && window.innerWidth >= 1024) {
+      return 'gooood';
+    }
+    return 'normal';
   });
   const [isPanicOpen, setIsPanicOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -111,6 +118,20 @@ export const App: React.FC = () => {
 
   // Render editor according to camouflage mode
   const renderActiveEditor = (chapter: Chapter) => {
+    if (camouflageMode === 'gooood') {
+      return (
+        <GoooodEditor
+          chapter={chapter}
+          allChapters={chapters}
+          onSelectChapter={(c) => setActiveChapterId(c.id)}
+          onSaveChapter={handleSaveChapter}
+          onBack={() => setActiveChapterId(null)}
+          onSwitchMode={handleSetCamouflageMode}
+          onTriggerPanic={() => setIsPanicOpen(true)}
+        />
+      );
+    }
+
     if (camouflageMode === 'vscode') {
       return (
         <VSCodeEditor
