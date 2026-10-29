@@ -3,13 +3,16 @@ import {
   ArrowLeft, 
   Sparkles, 
   MessageSquare, 
-  Copy 
+  Copy,
+  Undo2,
+  Redo2
 } from 'lucide-react';
 import { Chapter, Annotation } from '../types';
 import { CamouflageMode } from '../types/camouflage';
 import { computeTextMetrics, getCircledNumber } from '../utils/wordCount';
 import { formatNovelAndRemapAnnotations } from '../utils/novelFormatter';
 import { getSelectionCoordinates, SelectionCoords } from '../utils/selectionPosition';
+import { useHistory } from '../utils/useHistory';
 import { WordCountModal } from './WordCountModal';
 import { AnnotationSheet } from './AnnotationSheet';
 import { AnnotationListSheet } from './AnnotationListSheet';
@@ -82,10 +85,67 @@ export const Editor: React.FC<EditorProps> = ({
 
   const metrics = useMemo(() => computeTextMetrics(content), [content]);
 
+  // Undo / Redo History Stack (返回 / 前进)
+  const { pushSnapshot, undo, redo, canUndo, canRedo } = useHistory(
+    chapter.content,
+    chapter.annotations || []
+  );
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 2500);
   };
+
+  const handleUndo = useCallback(() => {
+    const snapshot = undo();
+    if (snapshot) {
+      setContent(snapshot.content);
+      setAnnotations(snapshot.annotations);
+      onSaveChapter({
+        ...chapter,
+        title,
+        content: snapshot.content,
+        annotations: snapshot.annotations,
+        updatedAt: Date.now(),
+      });
+      showToast('↶ 已返回 (撤销上一操作)');
+    }
+  }, [undo, chapter, title, onSaveChapter]);
+
+  const handleRedo = useCallback(() => {
+    const snapshot = redo();
+    if (snapshot) {
+      setContent(snapshot.content);
+      setAnnotations(snapshot.annotations);
+      onSaveChapter({
+        ...chapter,
+        title,
+        content: snapshot.content,
+        annotations: snapshot.annotations,
+        updatedAt: Date.now(),
+      });
+      showToast('↷ 已前进 (恢复重做)');
+    }
+  }, [redo, chapter, title, onSaveChapter]);
+
+  // Global Keyboard shortcuts for Undo/Redo
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          handleRedo();
+        } else {
+          handleUndo();
+        }
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleUndo, handleRedo]);
 
   // Sync scroll between textarea and backdrop
   const handleScroll = () => {
@@ -211,6 +271,7 @@ export const Editor: React.FC<EditorProps> = ({
     });
 
     setAnnotations(updatedAnnotations);
+    pushSnapshot(nextVal, updatedAnnotations);
     triggerSave(nextVal, updatedAnnotations, title);
   };
 
@@ -223,6 +284,7 @@ export const Editor: React.FC<EditorProps> = ({
 
     setContent(formattedContent);
     setAnnotations(updatedAnnotations);
+    pushSnapshot(formattedContent, updatedAnnotations, true);
     triggerSave(formattedContent, updatedAnnotations, title);
     showToast('✨ 小说排版完成：已自动清除首尾空格、清理多余空行！');
   };
@@ -254,6 +316,7 @@ export const Editor: React.FC<EditorProps> = ({
         a.id === activeSheetAnn.annId ? { ...a, comment } : a
       );
       setAnnotations(nextAnnotations);
+      pushSnapshot(content, nextAnnotations, true);
       triggerSave(content, nextAnnotations, title);
       showToast('✅ 批注意见已更新');
     } else {
@@ -271,6 +334,7 @@ export const Editor: React.FC<EditorProps> = ({
 
       const nextAnnotations = [...annotations, newAnn];
       setAnnotations(nextAnnotations);
+      pushSnapshot(content, nextAnnotations, true);
       triggerSave(content, nextAnnotations, title);
       showToast(`✅ 已添加批注 ${getCircledNumber(activeSheetAnn.index)}`);
       setSelection(null);
@@ -285,6 +349,7 @@ export const Editor: React.FC<EditorProps> = ({
       a.index = idx + 1;
     });
     setAnnotations(nextAnnotations);
+    pushSnapshot(content, nextAnnotations, true);
     triggerSave(content, nextAnnotations, title);
     showToast('🗑️ 批注已删除');
   };
@@ -467,6 +532,28 @@ export const Editor: React.FC<EditorProps> = ({
 
         {/* Header Right Actions */}
         <div className="flex items-center gap-1.5 shrink-0 ml-2">
+          {/* Undo / Redo (返回 / 前进) */}
+          <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-paper-800 p-0.5 rounded-lg border border-slate-200/60 dark:border-slate-700">
+            <button
+              type="button"
+              onClick={handleUndo}
+              disabled={!canUndo}
+              className="p-1.5 rounded-md hover:bg-white dark:hover:bg-paper-700 disabled:opacity-30 disabled:hover:bg-transparent text-slate-700 dark:text-slate-200 transition"
+              title="返回 (撤销上一操作 Cmd+Z)"
+            >
+              <Undo2 className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={handleRedo}
+              disabled={!canRedo}
+              className="p-1.5 rounded-md hover:bg-white dark:hover:bg-paper-700 disabled:opacity-30 disabled:hover:bg-transparent text-slate-700 dark:text-slate-200 transition"
+              title="前进 (恢复重做 Cmd+Shift+Z)"
+            >
+              <Redo2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
           {/* Mode Switcher (Camouflage / Disguise) */}
           <ModeSwitcher
             currentMode={camouflageMode}

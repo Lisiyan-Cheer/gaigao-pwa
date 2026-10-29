@@ -1,15 +1,18 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { 
   Sparkles, 
   Copy, 
   MessageSquare, 
   Search, 
   SlidersHorizontal,
-  ChevronDown
+  ChevronDown,
+  Undo2,
+  Redo2
 } from 'lucide-react';
 import { Chapter, Annotation } from '../../types';
 import { computeTextMetrics } from '../../utils/wordCount';
 import { formatNovelAndRemapAnnotations } from '../../utils/novelFormatter';
+import { useHistory } from '../../utils/useHistory';
 import { WordCountModal } from '../WordCountModal';
 import { AnnotationSheet } from '../AnnotationSheet';
 import { AnnotationListSheet } from '../AnnotationListSheet';
@@ -21,7 +24,7 @@ interface GoooodEditorProps {
   onSelectChapter: (chapter: Chapter) => void;
   onSaveChapter: (updated: Chapter) => void;
   onBack: () => void;
-  onSwitchMode: (mode: 'normal' | 'gooood' | 'vscode' | 'confluence') => void;
+  onSwitchMode: (mode: 'normal' | 'gooood') => void;
   onTriggerPanic: () => void;
 }
 
@@ -37,6 +40,17 @@ export const GoooodEditor: React.FC<GoooodEditorProps> = ({
   const [content, setContent] = useState(chapter.content);
   const [annotations, setAnnotations] = useState<Annotation[]>(chapter.annotations || []);
   const [sidebarWidth, setSidebarWidth] = useState<'normal' | 'wide' | 'ultra'>('wide');
+
+  // History Stack (返回 / 前进)
+  const { pushSnapshot, undo, redo, canUndo, canRedo } = useHistory(
+    chapter.content,
+    chapter.annotations || []
+  );
+
+  useEffect(() => {
+    setContent(chapter.content);
+    setAnnotations(chapter.annotations || []);
+  }, [chapter.id]);
 
   // Modals
   const [isWordCountOpen, setIsWordCountOpen] = useState(false);
@@ -68,9 +82,71 @@ export const GoooodEditor: React.FC<GoooodEditorProps> = ({
     setTimeout(() => setToastMessage(null), 2500);
   };
 
+  const handleUndo = useCallback(() => {
+    const prev = undo();
+    if (prev) {
+      setContent(prev.content);
+      setAnnotations(prev.annotations);
+      onSaveChapter({
+        ...chapter,
+        content: prev.content,
+        annotations: prev.annotations,
+        updatedAt: Date.now(),
+      });
+      showToast('↶ 已返回 (撤销上一操作)');
+    }
+  }, [undo, chapter, onSaveChapter]);
+
+  const handleRedo = useCallback(() => {
+    const next = redo();
+    if (next) {
+      setContent(next.content);
+      setAnnotations(next.annotations);
+      onSaveChapter({
+        ...chapter,
+        content: next.content,
+        annotations: next.annotations,
+        updatedAt: Date.now(),
+      });
+      showToast('↷ 已前进 (恢复重做)');
+    }
+  }, [redo, chapter, onSaveChapter]);
+
+  // Global Keyboard Shortcuts (Cmd+Z / Cmd+Shift+Z / Ctrl+Y / ESC)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onTriggerPanic();
+        return;
+      }
+
+      const isMac = typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+      const isModifier = isMac ? e.metaKey : e.ctrlKey;
+
+      if (isModifier && !e.altKey) {
+        if (e.key.toLowerCase() === 'z') {
+          if (e.shiftKey) {
+            e.preventDefault();
+            handleRedo();
+          } else {
+            e.preventDefault();
+            handleUndo();
+          }
+        } else if (e.key.toLowerCase() === 'y' && !isMac) {
+          e.preventDefault();
+          handleRedo();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleUndo, handleRedo, onTriggerPanic]);
+
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const nextVal = e.target.value;
     setContent(nextVal);
+    pushSnapshot(nextVal, annotations);
     onSaveChapter({
       ...chapter,
       content: nextVal,
@@ -97,6 +173,7 @@ export const GoooodEditor: React.FC<GoooodEditorProps> = ({
     const { formattedContent, updatedAnnotations } = formatNovelAndRemapAnnotations(content, annotations);
     setContent(formattedContent);
     setAnnotations(updatedAnnotations);
+    pushSnapshot(formattedContent, updatedAnnotations, true);
     onSaveChapter({ ...chapter, content: formattedContent, annotations: updatedAnnotations, updatedAt: Date.now() });
     showToast('✨ 文本排版已优化（规范首尾空格与空行）');
   };
@@ -397,6 +474,28 @@ export const GoooodEditor: React.FC<GoooodEditorProps> = ({
 
               {/* Functional Pills */}
               <div className="flex items-center gap-1.5">
+                {/* Undo / Redo (返回 / 前进) */}
+                <div className="flex items-center gap-0.5 bg-[#edf4f9] p-0.5 rounded border border-[#d8e6f0]">
+                  <button
+                    type="button"
+                    onClick={handleUndo}
+                    disabled={!canUndo}
+                    className="p-1 rounded hover:bg-white disabled:opacity-30 disabled:hover:bg-transparent text-[#446688] transition"
+                    title="返回 (撤销上一操作 Cmd+Z)"
+                  >
+                    <Undo2 className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRedo}
+                    disabled={!canRedo}
+                    className="p-1 rounded hover:bg-white disabled:opacity-30 disabled:hover:bg-transparent text-[#446688] transition"
+                    title="前进 (恢复重做 Cmd+Shift+Z)"
+                  >
+                    <Redo2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
                 {/* Word Count (Disguised) */}
                 <button
                   type="button"
@@ -551,6 +650,7 @@ export const GoooodEditor: React.FC<GoooodEditorProps> = ({
           };
           const next = [...annotations, newAnn];
           setAnnotations(next);
+          pushSnapshot(content, next, true);
           onSaveChapter({ ...chapter, content, annotations: next, updatedAt: Date.now() });
           setSelection(null);
         }}
@@ -565,6 +665,7 @@ export const GoooodEditor: React.FC<GoooodEditorProps> = ({
         onDeleteAnnotation={(id) => {
           const next = annotations.filter((a) => a.id !== id);
           setAnnotations(next);
+          pushSnapshot(content, next, true);
           onSaveChapter({ ...chapter, content, annotations: next, updatedAt: Date.now() });
         }}
       />

@@ -11,8 +11,6 @@ import {
 import { ChapterList } from './components/ChapterList';
 import { Editor } from './components/Editor';
 import { NewChapterModal } from './components/NewChapterModal';
-import { VSCodeEditor } from './components/camouflage/VSCodeEditor';
-import { ConfluenceEditor } from './components/camouflage/ConfluenceEditor';
 import { GoooodEditor } from './components/camouflage/GoooodEditor';
 import { BossPanicModal } from './components/camouflage/BossPanicModal';
 
@@ -124,32 +122,6 @@ export const App: React.FC = () => {
           chapter={chapter}
           allChapters={chapters}
           onSelectChapter={(c) => setActiveChapterId(c.id)}
-          onSaveChapter={handleSaveChapter}
-          onBack={() => setActiveChapterId(null)}
-          onSwitchMode={handleSetCamouflageMode}
-          onTriggerPanic={() => setIsPanicOpen(true)}
-        />
-      );
-    }
-
-    if (camouflageMode === 'vscode') {
-      return (
-        <VSCodeEditor
-          chapter={chapter}
-          allChapters={chapters}
-          onSelectChapter={(c) => setActiveChapterId(c.id)}
-          onSaveChapter={handleSaveChapter}
-          onBack={() => setActiveChapterId(null)}
-          onSwitchMode={handleSetCamouflageMode}
-          onTriggerPanic={() => setIsPanicOpen(true)}
-        />
-      );
-    }
-
-    if (camouflageMode === 'confluence') {
-      return (
-        <ConfluenceEditor
-          chapter={chapter}
           onSaveChapter={handleSaveChapter}
           onBack={() => setActiveChapterId(null)}
           onSwitchMode={handleSetCamouflageMode}

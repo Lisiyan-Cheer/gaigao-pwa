@@ -1,7 +1,5 @@
-export type CamouflageMode = 'normal' | 'gooood' | 'vscode' | 'confluence';
+export type CamouflageMode = 'normal' | 'gooood';
 
 export interface CamouflageSettings {
   mode: CamouflageMode;
-  codeWrapper: boolean;
-  fakeFileName: string;
 }
