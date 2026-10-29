@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f97316"/>
+      <stop offset="100%" stop-color="#ea580c"/>
+    </linearGradient>
+    <linearGradient id="paper" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#fefce8"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <!-- Background rounded rect -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+
+  <!-- Paper Card with shadow -->
+  <rect x="96" y="80" width="320" height="352" rx="28" fill="url(#paper)" filter="url(#shadow)"/>
+
+  <!-- Lines of text -->
+  <rect x="144" y="144" width="130" height="20" rx="10" fill="#f97316"/>
+  <rect x="144" y="196" width="224" height="14" rx="7" fill="#cbd5e1"/>
+  <rect x="144" y="234" width="180" height="14" rx="7" fill="#cbd5e1"/>
+
+  <!-- Highlighted sentence -->
+  <rect x="140" y="270" width="232" height="32" rx="8" fill="#fef08a" stroke="#facc15" stroke-width="2"/>
+  <text x="350" y="292" font-family="-apple-system, system-ui, sans-serif" font-size="18" font-weight="bold" fill="#b45309">①</text>
+  <rect x="152" y="279" width="180" height="14" rx="7" fill="#d97706" opacity="0.65"/>
+
+  <rect x="144" y="326" width="200" height="14" rx="7" fill="#cbd5e1"/>
+  <rect x="144" y="364" width="140" height="14" rx="7" fill="#cbd5e1"/>
+
+  <!-- Edit pen float -->
+  <circle cx="390" cy="380" r="44" fill="#3b82f6" filter="url(#shadow)"/>
+  <path d="M374 394 L378 376 L398 356 C401 353 405 353 408 356 L410 358 C413 361 413 365 410 368 L390 388 L374 394 Z" fill="#ffffff"/>
+  <path d="M374 394 L378 386 L382 390 Z" fill="#93c5fd"/>
+</svg>
