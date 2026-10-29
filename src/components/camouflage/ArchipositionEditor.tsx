@@ -8,7 +8,8 @@ import {
   Share2, 
   Bookmark, 
   Heart, 
-  Type 
+  Type,
+  Plus
 } from 'lucide-react';
 import { Chapter, Annotation } from '../../types';
 import { CamouflageMode } from '../../types/camouflage';
@@ -30,6 +31,121 @@ interface ArchipositionEditorProps {
   onTriggerPanic: () => void;
 }
 
+interface TextBlock {
+  id: string;
+  text: string;
+}
+
+const ARCH_PHOTOS = [
+  {
+    src: 'hero.png',
+    caption: '▲ 建筑西立面全景与自然光影 © 存在建筑',
+    alt: '普洛斯湾区西部智慧产业园-A16 建筑西立面全景',
+  },
+  {
+    src: 'axonometric.png',
+    caption: '▲ 空间生成与立体漫游轴测分析图 © JJP',
+    alt: '空间生成与立体漫游轴测分析图',
+  },
+  {
+    src: 'aerial.png',
+    caption: '▲ 园区整体规划生成与空间体量推演 © JJP',
+    alt: '园区整体规划生成与空间体量推演',
+  },
+  {
+    src: 'interior.png',
+    caption: '▲ 中庭通高采光井与多功能共享阶梯 © 存在建筑',
+    alt: '中庭通高采光井与多功能共享阶梯',
+  },
+  {
+    src: 'drawing.png',
+    caption: '▲ 首层功能分区与公共动线规划平面图 © JJP',
+    alt: '首层功能分区与公共动线规划平面图',
+  },
+  {
+    src: 'detail.png',
+    caption: '▲ 遮阳表皮双层金属网构造节点大样与安装剖面 © JJP',
+    alt: '遮阳表皮双层金属网构造节点大样与安装剖面',
+  },
+];
+
+// Split content by paragraphs into natural reading blocks
+function splitContentIntoBlocks(content: string, paragraphsPerBlock = 3): TextBlock[] {
+  const rawParagraphs = content.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  if (rawParagraphs.length === 0) {
+    return [{ id: 'block-0', text: content }];
+  }
+
+  const blocks: TextBlock[] = [];
+  let currentGroup: string[] = [];
+
+  for (let i = 0; i < rawParagraphs.length; i++) {
+    currentGroup.push(rawParagraphs[i]);
+    const currentLen = currentGroup.join('\n\n').length;
+    if (currentGroup.length >= paragraphsPerBlock || (currentLen > 450 && currentGroup.length >= 2)) {
+      blocks.push({
+        id: `block-${blocks.length}`,
+        text: currentGroup.join('\n\n'),
+      });
+      currentGroup = [];
+    }
+  }
+
+  if (currentGroup.length > 0) {
+    blocks.push({
+      id: `block-${blocks.length}`,
+      text: currentGroup.join('\n\n'),
+    });
+  }
+
+  return blocks;
+}
+
+// Auto-resizing borderless textarea component matching printed typography
+const AutoResizeTextarea: React.FC<{
+  value: string;
+  onChange: (val: string) => void;
+  onSelect: (e: React.SyntheticEvent<HTMLTextAreaElement>) => void;
+  fontFamily: 'serif' | 'sans';
+  placeholder?: string;
+}> = ({ value, onChange, onSelect, fontFamily, placeholder }) => {
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  const resize = () => {
+    if (ref.current) {
+      ref.current.style.height = 'auto';
+      ref.current.style.height = `${ref.current.scrollHeight}px`;
+    }
+  };
+
+  useEffect(() => {
+    resize();
+  }, [value, fontFamily]);
+
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      onChange={(e) => {
+        onChange(e.target.value);
+        resize();
+      }}
+      onSelect={onSelect}
+      placeholder={placeholder || '在此段落直接输入文字说明或修改...'}
+      spellCheck={false}
+      rows={Math.max(2, value.split('\n').length)}
+      className="w-full bg-transparent border-0 outline-none resize-none p-0 m-0 text-base sm:text-[17px] leading-[2.3] text-[#2c2b28] placeholder-stone-300 selection:bg-amber-200/50 overflow-hidden"
+      style={{
+        fontFamily:
+          fontFamily === 'serif'
+            ? '"Source Han Serif SC", "Noto Serif CJK SC", "Songti SC", SimSun, Georgia, serif'
+            : '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif',
+        letterSpacing: '0.02em',
+      }}
+    />
+  );
+};
+
 export const ArchipositionEditor: React.FC<ArchipositionEditorProps> = ({
   chapter,
   allChapters,
@@ -41,6 +157,7 @@ export const ArchipositionEditor: React.FC<ArchipositionEditorProps> = ({
 }) => {
   const [content, setContent] = useState(chapter.content);
   const [annotations, setAnnotations] = useState<Annotation[]>(chapter.annotations || []);
+  const [blocks, setBlocks] = useState<TextBlock[]>(() => splitContentIntoBlocks(chapter.content));
   const [fontFamily, setFontFamily] = useState<'serif' | 'sans'>('serif');
 
   // History Stack (返回 / 前进)
@@ -49,9 +166,11 @@ export const ArchipositionEditor: React.FC<ArchipositionEditorProps> = ({
     chapter.annotations || []
   );
 
+  // Re-chunk whenever active chapter changes
   useEffect(() => {
     setContent(chapter.content);
     setAnnotations(chapter.annotations || []);
+    setBlocks(splitContentIntoBlocks(chapter.content));
   }, [chapter.id]);
 
   // Modals
@@ -65,6 +184,8 @@ export const ArchipositionEditor: React.FC<ArchipositionEditorProps> = ({
     comment: string;
     isExisting: boolean;
     annId?: string;
+    startIndex?: number;
+    endIndex?: number;
   }>({
     isOpen: false,
     index: 1,
@@ -73,9 +194,14 @@ export const ArchipositionEditor: React.FC<ArchipositionEditorProps> = ({
     isExisting: false,
   });
 
-  const [selection, setSelection] = useState<{ text: string; start: number; end: number } | null>(null);
+  const [selection, setSelection] = useState<{
+    text: string;
+    blockIndex: number;
+    globalStart: number;
+    globalEnd: number;
+  } | null>(null);
+
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const metrics = useMemo(() => computeTextMetrics(content), [content]);
 
@@ -84,11 +210,13 @@ export const ArchipositionEditor: React.FC<ArchipositionEditorProps> = ({
     setTimeout(() => setToastMessage(null), 2500);
   };
 
+  // Undo
   const handleUndo = useCallback(() => {
     const prev = undo();
     if (prev) {
       setContent(prev.content);
       setAnnotations(prev.annotations);
+      setBlocks(splitContentIntoBlocks(prev.content));
       onSaveChapter({
         ...chapter,
         content: prev.content,
@@ -99,11 +227,13 @@ export const ArchipositionEditor: React.FC<ArchipositionEditorProps> = ({
     }
   }, [undo, chapter, onSaveChapter]);
 
+  // Redo
   const handleRedo = useCallback(() => {
     const next = redo();
     if (next) {
       setContent(next.content);
       setAnnotations(next.annotations);
+      setBlocks(splitContentIntoBlocks(next.content));
       onSaveChapter({
         ...chapter,
         content: next.content,
@@ -114,7 +244,7 @@ export const ArchipositionEditor: React.FC<ArchipositionEditorProps> = ({
     }
   }, [redo, chapter, onSaveChapter]);
 
-  // Global Keyboard Shortcuts (Cmd+Z / Cmd+Shift+Z / Ctrl+Y / ESC)
+  // Global Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -145,41 +275,64 @@ export const ArchipositionEditor: React.FC<ArchipositionEditorProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleUndo, handleRedo, onTriggerPanic]);
 
-  const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const nextVal = e.target.value;
-    setContent(nextVal);
-    pushSnapshot(nextVal, annotations);
+  // Update a single block's text while preserving stable IDs and cursor focus
+  const handleBlockChange = (blockId: string, newText: string) => {
+    const nextBlocks = blocks.map((b) => (b.id === blockId ? { ...b, text: newText } : b));
+    setBlocks(nextBlocks);
+
+    const nextFullContent = nextBlocks.map((b) => b.text).join('\n\n');
+    setContent(nextFullContent);
+    pushSnapshot(nextFullContent, annotations);
     onSaveChapter({
       ...chapter,
-      content: nextVal,
+      content: nextFullContent,
       annotations,
       updatedAt: Date.now(),
     });
   };
 
-  const handleSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+  // Track selection inside a specific block and map to global indices
+  const handleBlockSelect = (blockIndex: number, e: React.SyntheticEvent<HTMLTextAreaElement>) => {
     const el = e.currentTarget;
     const start = el.selectionStart;
     const end = el.selectionEnd;
     if (start !== end) {
       const sub = el.value.substring(start, end).trim();
       if (sub.length > 0) {
-        setSelection({ text: sub, start, end });
+        // Calculate global offset
+        let globalOffset = 0;
+        for (let i = 0; i < blockIndex; i++) {
+          globalOffset += blocks[i].text.length + 2; // + 2 for '\n\n'
+        }
+        setSelection({
+          text: sub,
+          blockIndex,
+          globalStart: globalOffset + start,
+          globalEnd: globalOffset + end,
+        });
         return;
       }
     }
     setSelection(null);
   };
 
+  // Format novel text and re-chunk
   const handleFormat = () => {
     const { formattedContent, updatedAnnotations } = formatNovelAndRemapAnnotations(content, annotations);
     setContent(formattedContent);
     setAnnotations(updatedAnnotations);
+    setBlocks(splitContentIntoBlocks(formattedContent));
     pushSnapshot(formattedContent, updatedAnnotations, true);
-    onSaveChapter({ ...chapter, content: formattedContent, annotations: updatedAnnotations, updatedAt: Date.now() });
-    showToast('✨ 设计草案排版完成（规范空行与首行缩进）');
+    onSaveChapter({
+      ...chapter,
+      content: formattedContent,
+      annotations: updatedAnnotations,
+      updatedAt: Date.now(),
+    });
+    showToast('✨ 图文排版整理完成（规范空行与段落）');
   };
 
+  // Open Annotation Sheet from selection
   const handleAnnotate = () => {
     if (!selection) return;
     const nextIndex = annotations.length > 0 ? Math.max(...annotations.map((a) => a.index)) + 1 : 1;
@@ -189,7 +342,21 @@ export const ArchipositionEditor: React.FC<ArchipositionEditorProps> = ({
       quotedText: selection.text,
       comment: '',
       isExisting: false,
+      startIndex: selection.globalStart,
+      endIndex: selection.globalEnd,
     });
+  };
+
+  // Insert a new section below block
+  const handleInsertSection = (afterIndex: number) => {
+    const newBlock: TextBlock = {
+      id: `block-${Date.now()}`,
+      text: '',
+    };
+    const nextBlocks = [...blocks];
+    nextBlocks.splice(afterIndex + 1, 0, newBlock);
+    setBlocks(nextBlocks);
+    showToast('📷 已插入新图片与说明分段');
   };
 
   const baseUrl = './';
@@ -207,7 +374,7 @@ export const ArchipositionEditor: React.FC<ArchipositionEditorProps> = ({
       {/* 1. Archiposition Top Navbar (1:1 Exact Match)                  */}
       {/* ============================================================== */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-[#e5e1dc] shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
-        <div className="max-w-[1180px] mx-auto px-4 h-16 flex items-center justify-between">
+        <div className="max-w-[1060px] mx-auto px-4 h-16 flex items-center justify-between">
           {/* Logo & Navigation */}
           <div className="flex items-center gap-8">
             {/* Archiposition Red Mark & Text Logo */}
@@ -244,7 +411,6 @@ export const ArchipositionEditor: React.FC<ArchipositionEditorProps> = ({
               <Search className="w-3.5 h-3.5 text-[#999]" />
               <span>搜索建筑项目、学者、竞赛</span>
             </div>
-            <span className="cursor-pointer hover:text-[#d9231f] hidden sm:inline">登录</span>
 
             {/* Camouflage & Emergency Switchers */}
             <div className="flex items-center gap-2 pl-2 border-l border-[#e5e1dc]">
@@ -278,9 +444,9 @@ export const ArchipositionEditor: React.FC<ArchipositionEditorProps> = ({
       </header>
 
       {/* ============================================================== */}
-      {/* 2. Main Article Body Container (Authentic Editorial Format)    */}
+      {/* 2. Main Article Body Container (Seamless Text & Photo Flow)    */}
       {/* ============================================================== */}
-      <main className="max-w-[880px] mx-auto px-4 py-8 flex-1 w-full space-y-7">
+      <main className="max-w-[820px] mx-auto px-4 py-8 flex-1 w-full space-y-7">
         
         {/* Breadcrumb */}
         <div className="text-xs text-[#888888] flex items-center gap-2">
@@ -293,21 +459,103 @@ export const ArchipositionEditor: React.FC<ArchipositionEditorProps> = ({
           <span className="text-[#333] font-medium">普洛斯湾区西部智慧产业园-A16</span>
         </div>
 
-        {/* Project Article Title Header */}
-        <div className="space-y-3 pb-3 border-b border-[#e8e4de]">
-          <h1 className="text-2xl sm:text-3xl lg:text-[32px] font-bold text-[#111111] leading-tight font-serif tracking-tight">
+        {/* Project Article Title & Minimalist Editorial Utility Bar */}
+        <div className="space-y-4 pb-4 border-b border-[#e8e4de]">
+          <h1 className="text-2xl sm:text-3xl lg:text-[34px] font-bold text-[#111111] leading-tight font-serif tracking-tight">
             JJP新作：织两片纱网，普洛斯湾区西部智慧产业园-A16
           </h1>
           <p className="text-sm sm:text-base text-[#666666] leading-relaxed">
             在保障高效运转的同时，回应劳动者的日常使用需求并为互动联结创造条件。
           </p>
-          <div className="text-xs text-[#999999] flex flex-wrap items-center justify-between gap-3 pt-2">
-            <div className="flex items-center gap-4">
-              <span>时间：2026.10.28</span>
-              <span>类别：建筑 / 工业建筑 / 改造</span>
-              <span>标签：JJP · 潘冀建筑 · 肇庆 · 遮阳纱网</span>
+
+          {/* Minimalist Editorial Utility Strip (悄悄把改稿工具融入文章信息条中) */}
+          <div className="pt-2 flex flex-wrap items-center justify-between gap-3 text-xs text-[#666666] border-t border-[#f0ede6]">
+            {/* Left: Chapter Selector & History Controls */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[#999]">空间叙事推演草案：</span>
+              {/* Discreet Chapter Selector Dropdown */}
+              <select
+                value={chapter.id}
+                onChange={(e) => {
+                  const target = allChapters.find((c) => c.id === e.target.value);
+                  if (target) onSelectChapter(target);
+                }}
+                className="bg-transparent font-medium text-[#111] hover:text-[#d9231f] focus:outline-none cursor-pointer max-w-[180px] truncate underline decoration-stone-300 underline-offset-4"
+                title="切换章节"
+              >
+                {allChapters.map((ch) => (
+                  <option key={ch.id} value={ch.id}>
+                    {ch.chapterNum || '001'} - {ch.title.replace(/第.*?[章_]/, '').slice(0, 14)}
+                  </option>
+                ))}
+              </select>
+
+              {/* Undo / Redo (返回 / 前进) */}
+              <div className="flex items-center gap-0.5 ml-2 pl-2 border-l border-stone-200">
+                <button
+                  type="button"
+                  onClick={handleUndo}
+                  disabled={!canUndo}
+                  className="p-1 rounded hover:bg-stone-200 disabled:opacity-25 disabled:hover:bg-transparent text-stone-700 transition"
+                  title="返回 (撤销 Cmd+Z)"
+                >
+                  <Undo2 className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRedo}
+                  disabled={!canRedo}
+                  className="p-1 rounded hover:bg-stone-200 disabled:opacity-25 disabled:hover:bg-transparent text-stone-700 transition"
+                  title="前进 (恢复重做 Cmd+Shift+Z)"
+                >
+                  <Redo2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* Word Count (Disguised as article metrics) */}
+              <button
+                type="button"
+                onClick={() => setIsWordCountOpen(true)}
+                className="ml-2 hover:text-[#d9231f] text-stone-600 transition"
+                title="点击查看字数统计详情"
+              >
+                {metrics.charsNoSpaces.toLocaleString()} 字
+              </button>
+
+              {/* Format Button */}
+              <button
+                type="button"
+                onClick={handleFormat}
+                className="p-1 text-stone-500 hover:text-amber-600 rounded transition"
+                title="整理排版（规范空行与首行缩进）"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+              </button>
+
+              {/* Export AI Prompt */}
+              <button
+                type="button"
+                onClick={() => setIsExportOpen(true)}
+                className="p-1 text-stone-500 hover:text-[#d9231f] rounded flex items-center gap-1 transition"
+                title="生成 AI 改稿指令（两步法）"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">导出指令</span>
+              </button>
+
+              {/* Font Serif / Sans */}
+              <button
+                type="button"
+                onClick={() => setFontFamily((prev) => (prev === 'serif' ? 'sans' : 'serif'))}
+                className="p-1 text-stone-500 hover:text-stone-900 rounded transition"
+                title={`切换排印字体（当前：${fontFamily === 'serif' ? '宋体' : '黑体'}）`}
+              >
+                <Type className="w-3.5 h-3.5" />
+              </button>
             </div>
-            <div className="flex items-center gap-3 text-xs text-[#666]">
+
+            {/* Right: Social Actions */}
+            <div className="flex items-center gap-3 text-xs text-[#888]">
               <span className="flex items-center gap-1 cursor-pointer hover:text-[#d9231f]">
                 <Heart className="w-3.5 h-3.5" /> 842
               </span>
@@ -321,20 +569,6 @@ export const ArchipositionEditor: React.FC<ArchipositionEditorProps> = ({
           </div>
         </div>
 
-        {/* Project Hero Image */}
-        <figure className="space-y-2">
-          <div className="rounded-lg overflow-hidden border border-[#e5e1dc] bg-stone-100 shadow-sm">
-            <img 
-              src={`${baseUrl}arch/hero.png`} 
-              alt="普洛斯湾区西部智慧产业园-A16 建筑西立面全景"
-              className="w-full h-auto object-cover"
-            />
-          </div>
-          <figcaption className="text-xs text-[#888888] text-center font-serif">
-            ▲ 建筑西立面全景 © 存在建筑
-          </figcaption>
-        </figure>
-
         {/* Project Information Box (典型建筑媒体信息块) */}
         <div className="p-4 sm:p-5 rounded-lg bg-[#f5f2eb] border border-[#e8e3d8] text-xs sm:text-sm text-[#444444] space-y-2 leading-relaxed">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 font-sans">
@@ -346,226 +580,90 @@ export const ArchipositionEditor: React.FC<ArchipositionEditorProps> = ({
             <div><strong className="text-[#222]">建筑摄影：</strong>存在建筑</div>
           </div>
           <div className="pt-2 border-t border-[#dfd9cd] text-[11px] text-[#888] italic">
-            * 本文图纸与文字说明由设计单位 JJP 授权提供发布。
+            * 本文图纸与文字说明由设计单位 JJP 授权发布。
           </div>
         </div>
 
         {/* Lead Editorial Paragraph */}
-        <div className="prose prose-stone max-w-none text-base leading-[2.1] text-[#333333] space-y-4 font-serif">
+        <div className="prose prose-stone max-w-none text-base leading-[2.2] text-[#333333] space-y-4 font-serif">
           <p className="indent-8">
             在现代工业物流领域，空间通常围绕“高周转与效率”展开组织，仓储、分拣、运输与调度环环相扣，建筑的衡量标准长期停留在流线最短化与坪效最大化。然而，随着全球现代产业竞争从基础产能向人才、研发、人文关怀与社群链接拓展，工业与产业园区建筑逐渐展现出更深远的社会属性。
           </p>
           <p className="indent-8">
-            当日常场域汇聚数以千计的年轻工程师与一线作业人员时，如何在严密的高效运作之外，为劳动者的驻足、休整与非正式交流提供有尊严的空间界面，成为本次设计的核心母题。
+            当日常场域汇聚数以千计的年轻工程师与一线作业人员时，如何在严密的高效运作之外，为劳动者的驻足、休整与非正式交流提供有尊严的空间界面，成为本次空间叙事推演的核心母题。
           </p>
         </div>
 
-        {/* Axonometric Architectural Drawing */}
-        <figure className="space-y-2">
-          <div className="rounded-lg overflow-hidden border border-[#e5e1dc] bg-stone-100 shadow-sm">
-            <img 
-              src={`${baseUrl}arch/axonometric.png`} 
-              alt="空间生成与立体漫游轴测示意"
-              className="w-full h-auto object-cover"
-            />
-          </div>
-          <figcaption className="text-xs text-[#888888] text-center font-serif">
-            ▲ 空间生成与立体漫游轴测分析图 © JJP
-          </figcaption>
-        </figure>
-
         {/* ============================================================== */}
-        {/* 3. THE MASTER CAMOUFLAGE EDITOR (夹在正文中的设计草案与推演)   */}
+        {/* 3. SEAMLESS INTERLEAVED STREAM: PHOTOS + TEXT CHUNKS            */}
         {/* ============================================================== */}
-        <section className="my-8 rounded-xl border-2 border-stone-300/80 bg-white shadow-md overflow-hidden transition-all">
-          {/* Editor Disguised Header Toolbar */}
-          <div className="bg-[#f5f2ec] border-b border-[#e5e0d6] px-4 py-2.5 flex flex-wrap items-center justify-between gap-2.5">
-            {/* Title & Badge */}
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="px-2 py-0.5 rounded bg-[#2c2b29] text-white text-[11px] font-semibold shrink-0">
-                设计理念草案
-              </span>
-              <span className="font-bold text-xs sm:text-sm text-[#333] truncate">
-                空间叙事场景推演与设计说明（修编中）
-              </span>
-            </div>
+        <div className="space-y-10 pt-2">
+          {blocks.map((block, idx) => {
+            const photo = ARCH_PHOTOS[idx % ARCH_PHOTOS.length];
 
-            {/* Action Tools */}
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {/* Chapter Selector Dropdown */}
-              <select
-                value={chapter.id}
-                onChange={(e) => {
-                  const target = allChapters.find((c) => c.id === e.target.value);
-                  if (target) onSelectChapter(target);
-                }}
-                className="bg-white border border-[#d8d2c6] text-[#333] text-xs rounded px-2 py-1 font-medium hover:border-stone-400 focus:outline-none cursor-pointer max-w-[150px] truncate"
-              >
-                {allChapters.map((ch) => (
-                  <option key={ch.id} value={ch.id}>
-                    {ch.chapterNum || '001'} - {ch.title.replace(/第.*?[章_]/, '').slice(0, 12)}
-                  </option>
-                ))}
-              </select>
+            return (
+              <div key={block.id} className="space-y-6">
+                {/* Architectural Photo & Drawing (Interleaved) */}
+                <figure className="space-y-2">
+                  <div className="rounded-lg overflow-hidden border border-[#e5e1dc] bg-stone-100 shadow-sm">
+                    <img 
+                      src={`${baseUrl}arch/${photo.src}`} 
+                      alt={photo.alt}
+                      loading="lazy"
+                      className="w-full h-auto object-cover max-h-[560px]"
+                    />
+                  </div>
+                  <figcaption className="text-xs text-[#888888] text-center font-serif">
+                    {photo.caption}
+                  </figcaption>
+                </figure>
 
-              {/* Undo / Redo (返回 / 前进) */}
-              <div className="flex items-center gap-0.5 bg-white p-0.5 rounded border border-[#d8d2c6]">
-                <button
-                  type="button"
-                  onClick={handleUndo}
-                  disabled={!canUndo}
-                  className="p-1 rounded hover:bg-stone-100 disabled:opacity-30 disabled:hover:bg-transparent text-stone-700 transition"
-                  title="返回 (撤销上一操作 Cmd+Z)"
-                >
-                  <Undo2 className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={handleRedo}
-                  disabled={!canRedo}
-                  className="p-1 rounded hover:bg-stone-100 disabled:opacity-30 disabled:hover:bg-transparent text-stone-700 transition"
-                  title="前进 (恢复重做 Cmd+Shift+Z)"
-                >
-                  <Redo2 className="w-3.5 h-3.5" />
-                </button>
+                {/* Subtitle for the section (融入空间推演叙事) */}
+                <div className="flex items-center justify-between text-xs text-[#777] border-b border-stone-200/60 pb-1.5 font-serif">
+                  <span className="font-bold text-stone-800 tracking-wide">
+                    空间叙事场景推演与设计说明（片段 0{idx + 1}）
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleInsertSection(idx)}
+                    className="text-[11px] text-[#888] hover:text-[#d9231f] flex items-center gap-0.5 transition"
+                    title="在此处下方插入新图纸与分段"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>插入图纸分隔</span>
+                  </button>
+                </div>
+
+                {/* Seamless Text Section (Zero border, zero frame, pure article text) */}
+                <div className="relative">
+                  <AutoResizeTextarea
+                    value={block.text}
+                    onChange={(newVal) => handleBlockChange(block.id, newVal)}
+                    onSelect={(e) => handleBlockSelect(idx, e)}
+                    fontFamily={fontFamily}
+                    placeholder={`在此直接输入或编辑第 ${idx + 1} 节设计说明...`}
+                  />
+
+                  {/* Floating Annotation pill on selection */}
+                  {selection && selection.blockIndex === idx && (
+                    <div className="sticky bottom-6 flex justify-end z-30 animate-fade-in pointer-events-auto">
+                      <button
+                        type="button"
+                        onClick={handleAnnotate}
+                        className="px-3.5 py-1.5 rounded-full bg-[#d9231f] text-white text-xs font-semibold shadow-xl hover:bg-[#c21f1b] transition flex items-center gap-1.5 border border-white"
+                      >
+                        <span>✍️ 批注选句 ({selection.text.length}字)</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
-
-              {/* Word Count (Disguised Pill) */}
-              <button
-                type="button"
-                onClick={() => setIsWordCountOpen(true)}
-                className="px-2.5 py-1 rounded bg-stone-100 text-stone-700 font-semibold text-xs border border-stone-200 hover:bg-stone-200 transition"
-                title="点击查看精确字数分析"
-              >
-                {metrics.charsNoSpaces.toLocaleString()} 字
-              </button>
-
-              {/* Format Button */}
-              <button
-                type="button"
-                onClick={handleFormat}
-                className="p-1.5 text-stone-600 hover:text-amber-600 rounded hover:bg-white border border-transparent hover:border-stone-200 transition"
-                title="一键整理排版（消除多余空行、规范缩进）"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-              </button>
-
-              {/* Export AI Prompt */}
-              <button
-                type="button"
-                onClick={() => setIsExportOpen(true)}
-                className="px-2.5 py-1 rounded bg-[#d9231f] hover:bg-[#c21f1b] text-white font-medium text-xs shadow-sm flex items-center gap-1 transition"
-                title="生成 AI 改稿指令（严格两步法）"
-              >
-                <Copy className="w-3 h-3" />
-                <span>导出指令</span>
-              </button>
-
-              {/* Font Toggle */}
-              <button
-                type="button"
-                onClick={() => setFontFamily((prev) => (prev === 'serif' ? 'sans' : 'serif'))}
-                className="p-1.5 text-stone-600 hover:text-stone-900 rounded hover:bg-white border border-transparent hover:border-stone-200 transition"
-                title={`切换排印字体：当前为${fontFamily === 'serif' ? '宋体/衬线' : '黑体/无衬线'}`}
-              >
-                <Type className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-
-          {/* Subtitle explanation */}
-          <div className="px-4 py-1.5 bg-[#fbf9f5] border-b border-[#eeeae2] text-[11px] text-[#888] flex items-center justify-between">
-            <span>正文草案段落（此处输入小说内容，与有方设计说明版式 1:1 无缝融合）</span>
-            <span className="text-stone-400">已启用自动云端保存</span>
-          </div>
-
-          {/* Editor Textarea */}
-          <div className="relative p-5 sm:p-6 bg-[#fffefb]">
-            <textarea
-              ref={textareaRef}
-              value={content}
-              onChange={handleContentChange}
-              onSelect={handleSelect}
-              placeholder="在此直接输入或修改章节正文（完全融入有方建筑项目设计说明中，字距行高与真实建筑专稿毫无二致）..."
-              spellCheck={false}
-              rows={22}
-              className={`w-full text-base sm:text-[17px] leading-[2.3] text-[#2c2b28] bg-transparent resize-y focus:outline-none placeholder-stone-300 selection:bg-amber-200/50 ${
-                fontFamily === 'serif' ? 'font-serif' : 'font-sans'
-              }`}
-              style={{
-                fontFamily:
-                  fontFamily === 'serif'
-                    ? '"Source Han Serif SC", "Noto Serif CJK SC", "Songti SC", SimSun, Georgia, serif'
-                    : '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif',
-                textIndent: '2em',
-                letterSpacing: '0.02em',
-              }}
-            />
-
-            {/* Floating Annotation pill on selection */}
-            {selection && (
-              <div
-                className="absolute z-20 animate-fade-in"
-                style={{
-                  top: '1rem',
-                  right: '1.5rem',
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={handleAnnotate}
-                  className="px-3 py-1.5 rounded-full bg-[#d9231f] text-white text-xs font-semibold shadow-lg hover:bg-[#c21f1b] transition flex items-center gap-1.5 border border-white"
-                >
-                  <span>✍️ 批注选句 ({selection.text.length}字)</span>
-                </button>
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* Continuation of Architectural Review: Interior Photo */}
-        <figure className="space-y-2">
-          <div className="rounded-lg overflow-hidden border border-[#e5e1dc] bg-stone-100 shadow-sm">
-            <img 
-              src={`${baseUrl}arch/interior.png`} 
-              alt="中庭采光天棚与多功能共享阶梯"
-              className="w-full h-auto object-cover"
-            />
-          </div>
-          <figcaption className="text-xs text-[#888888] text-center font-serif">
-            ▲ 中庭采光天棚与多功能共享阶梯 © 存在建筑
-          </figcaption>
-        </figure>
-
-        {/* Architectural Body Text: 构造与表皮策略 */}
-        <div className="prose prose-stone max-w-none text-base leading-[2.1] text-[#333333] space-y-4 font-serif">
-          <h2 className="text-xl font-bold text-[#111] font-serif pt-2 border-b border-stone-200 pb-2">
-            立面策略：织两片纱网应对岭南西晒
-          </h2>
-          <p className="indent-8">
-            岭南强烈的西晒是该项目不可回避的地理气候条件。设计团队并未采取全封闭阻绝的方式，而是提出了“织两片纱网”的构造设想：外层为通透轻盈的冲孔金属网与遮阳百叶，内层为双层中空 Low-E 玻璃界面。
-          </p>
-          <p className="indent-8">
-            两层界面的空腔自然形成了烟囱效应，加速了热压通风，同时也随着每日不同时段的日光折射，在室内地坪投下如竹林光斑般的渐变阴影，消解了工业建筑以往沉重而冰冷的器械感。
-          </p>
+            );
+          })}
         </div>
-
-        {/* Detail Drawing */}
-        <figure className="space-y-2">
-          <div className="rounded-lg overflow-hidden border border-[#e5e1dc] bg-stone-100 shadow-sm">
-            <img 
-              src={`${baseUrl}arch/detail.png`} 
-              alt="遮阳表皮构造节点剖面与安装大样"
-              className="w-full h-auto object-cover"
-            />
-          </div>
-          <figcaption className="text-xs text-[#888888] text-center font-serif">
-            ▲ 遮阳表皮构造节点剖面与安装大样 © JJP
-          </figcaption>
-        </figure>
 
         {/* Project Credits Footer Box */}
-        <div className="mt-12 p-6 rounded-lg bg-[#f5f2eb] border border-[#e5dfd2] text-xs text-[#555] space-y-3 leading-relaxed font-sans">
+        <div className="mt-14 p-6 rounded-lg bg-[#f5f2eb] border border-[#e5dfd2] text-xs text-[#555] space-y-3 leading-relaxed font-sans">
           <div className="font-bold text-sm text-[#222] border-b border-stone-300 pb-2">
             完整项目档案 · Credits
           </div>
@@ -584,7 +682,7 @@ export const ArchipositionEditor: React.FC<ArchipositionEditorProps> = ({
       {/* 4. Archiposition Authentic Footer                              */}
       {/* ============================================================== */}
       <footer className="mt-16 border-t border-[#e5e1dc] bg-white py-10 text-xs text-[#777]">
-        <div className="max-w-[1180px] mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-6">
+        <div className="max-w-[1060px] mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-4">
             <div className="w-5 h-5 bg-[#d9231f] flex items-center justify-center text-white font-serif font-black text-[10px] rounded-sm">
               方
@@ -623,8 +721,8 @@ export const ArchipositionEditor: React.FC<ArchipositionEditorProps> = ({
             id: `ann-${Date.now()}`,
             index: activeSheetAnn.index,
             text: activeSheetAnn.quotedText,
-            startIndex: selection?.start || 0,
-            endIndex: selection?.end || activeSheetAnn.quotedText.length,
+            startIndex: activeSheetAnn.startIndex || 0,
+            endIndex: activeSheetAnn.endIndex || activeSheetAnn.quotedText.length,
             comment,
             status: 'active',
             createdAt: Date.now(),
