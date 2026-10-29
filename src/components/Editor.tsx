@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { 
   ArrowLeft, 
   Sparkles, 
@@ -8,6 +8,7 @@ import {
 import { Chapter, Annotation } from '../types';
 import { computeTextMetrics, getCircledNumber } from '../utils/wordCount';
 import { formatNovelAndRemapAnnotations } from '../utils/novelFormatter';
+import { getSelectionCoordinates, SelectionCoords } from '../utils/selectionPosition';
 import { WordCountModal } from './WordCountModal';
 import { AnnotationSheet } from './AnnotationSheet';
 import { AnnotationListSheet } from './AnnotationListSheet';
@@ -50,15 +51,19 @@ export const Editor: React.FC<EditorProps> = ({
     isExisting: false,
   });
 
-  // Selection state
+  // Selection state with exact screen coordinates
   const [selection, setSelection] = useState<{
     text: string;
     start: number;
     end: number;
+    coords: SelectionCoords | null;
   } | null>(null);
 
-  // Active cursor annotation detector
-  const [cursorAnnotation, setCursorAnnotation] = useState<Annotation | null>(null);
+  // Active cursor annotation detector with screen coordinates
+  const [cursorAnnotation, setCursorAnnotation] = useState<{
+    ann: Annotation;
+    coords: SelectionCoords | null;
+  } | null>(null);
 
   // Toast feedback
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -80,6 +85,8 @@ export const Editor: React.FC<EditorProps> = ({
       backdropRef.current.scrollTop = textareaRef.current.scrollTop;
       backdropRef.current.scrollLeft = textareaRef.current.scrollLeft;
     }
+    // Update floating positions smoothly on scroll
+    updateSelectionState();
   };
 
   // Auto-save debounced
@@ -97,6 +104,70 @@ export const Editor: React.FC<EditorProps> = ({
       });
     }, 400);
   };
+
+  // Selection & Cursor detection and coordinate calculation
+  const updateSelectionState = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+
+    // Detect cursor inside existing annotation (start === end)
+    if (start === end) {
+      setSelection(null);
+      const found = annotations.find(
+        (a) => a.status === 'active' && start >= a.startIndex && start <= a.endIndex
+      );
+      if (found) {
+        const coords = getSelectionCoordinates(el, found.startIndex, found.endIndex, 170, 36);
+        setCursorAnnotation({ ann: found, coords });
+      } else {
+        setCursorAnnotation(null);
+      }
+      return;
+    }
+
+    // Text selected!
+    const selectedText = el.value.substring(start, end).trim();
+    if (selectedText.length > 0) {
+      const coords = getSelectionCoordinates(el, start, end, 140, 36);
+      setSelection({
+        text: selectedText,
+        start,
+        end,
+        coords,
+      });
+      setCursorAnnotation(null);
+    } else {
+      setSelection(null);
+    }
+  }, [annotations]);
+
+  // Listen to selectionchange and visualViewport changes (for iOS keyboard pop-up)
+  useEffect(() => {
+    const onSelectionChange = () => {
+      if (document.activeElement === textareaRef.current) {
+        updateSelectionState();
+      }
+    };
+
+    const onViewportChange = () => {
+      updateSelectionState();
+    };
+
+    document.addEventListener('selectionchange', onSelectionChange);
+    window.addEventListener('resize', onViewportChange);
+    window.visualViewport?.addEventListener('resize', onViewportChange);
+    window.visualViewport?.addEventListener('scroll', onViewportChange);
+
+    return () => {
+      document.removeEventListener('selectionchange', onSelectionChange);
+      window.removeEventListener('resize', onViewportChange);
+      window.visualViewport?.removeEventListener('resize', onViewportChange);
+      window.visualViewport?.removeEventListener('scroll', onViewportChange);
+    };
+  }, [updateSelectionState]);
 
   // Handle typing in textarea
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -133,37 +204,6 @@ export const Editor: React.FC<EditorProps> = ({
 
     setAnnotations(updatedAnnotations);
     triggerSave(nextVal, updatedAnnotations, title);
-  };
-
-  // Selection detection
-  const handleSelect = () => {
-    const el = textareaRef.current;
-    if (!el) return;
-
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
-
-    // Detect cursor inside existing annotation
-    if (start === end) {
-      const found = annotations.find(
-        (a) => a.status === 'active' && start >= a.startIndex && start <= a.endIndex
-      );
-      setCursorAnnotation(found || null);
-      setSelection(null);
-      return;
-    }
-
-    const selectedText = el.value.substring(start, end).trim();
-    if (selectedText.length > 0) {
-      setSelection({
-        text: selectedText,
-        start,
-        end,
-      });
-    } else {
-      setSelection(null);
-    }
-    setCursorAnnotation(null);
   };
 
   // One-click formatting (✨ 排版)
@@ -259,6 +299,7 @@ export const Editor: React.FC<EditorProps> = ({
       top: targetScroll,
       behavior: 'smooth',
     });
+    updateSelectionState();
   };
 
   // Render highlighted segments in the backdrop
@@ -420,7 +461,7 @@ export const Editor: React.FC<EditorProps> = ({
           ref={textareaRef}
           value={content}
           onChange={handleContentChange}
-          onSelect={handleSelect}
+          onSelect={updateSelectionState}
           onScroll={handleScroll}
           placeholder="在此处直接输入或修改正文..."
           spellCheck={false}
@@ -431,40 +472,74 @@ export const Editor: React.FC<EditorProps> = ({
         />
       </div>
 
-      {/* Cursor context indicator if cursor is resting in an existing annotation */}
-      {cursorAnnotation && (
-        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-20 bg-amber-500 text-white text-xs px-3.5 py-1.5 rounded-full shadow-lg flex items-center gap-2 animate-fade-in">
-          <span>当前光标：批注 {getCircledNumber(cursorAnnotation.index)}</span>
+      {/* Selection Floating Pill — Pops up directly beside/above the selected text */}
+      {selection && selection.coords && (
+        <div
+          style={{
+            position: 'fixed',
+            left: `${selection.coords.x}px`,
+            top: `${selection.coords.y}px`,
+            zIndex: 50,
+          }}
+          className="animate-fade-in pointer-events-auto"
+        >
           <button
             type="button"
-            onClick={() => {
-              setActiveSheetAnn({
-                isOpen: true,
-                index: cursorAnnotation.index,
-                quotedText: cursorAnnotation.text,
-                comment: cursorAnnotation.comment,
-                isExisting: true,
-                annId: cursorAnnotation.id,
-              });
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
             }}
-            className="underline font-bold"
-          >
-            查看/修改
-          </button>
-        </div>
-      )}
-
-      {/* Selection Floating Pill */}
-      {selection && (
-        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-30 animate-bounce-short">
-          <button
-            type="button"
+            onTouchStart={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
             onClick={handleAnnotateSelection}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 text-white font-semibold text-xs shadow-xl shadow-orange-500/30 hover:scale-105 active:scale-95 transition"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 text-white font-semibold text-xs shadow-xl shadow-orange-500/40 hover:scale-105 active:scale-95 transition-all whitespace-nowrap border border-white/20 ring-2 ring-orange-500/20"
           >
             <MessageSquare className="w-3.5 h-3.5 fill-current" />
             <span>💬 批注所选 ({selection.text.length}字)</span>
           </button>
+        </div>
+      )}
+
+      {/* Cursor context indicator — Pops up directly beside the active annotation */}
+      {cursorAnnotation && cursorAnnotation.coords && (
+        <div
+          style={{
+            position: 'fixed',
+            left: `${cursorAnnotation.coords.x}px`,
+            top: `${cursorAnnotation.coords.y}px`,
+            zIndex: 45,
+          }}
+          className="animate-fade-in pointer-events-auto"
+        >
+          <div className="bg-amber-500 text-white text-xs px-3 py-1.5 rounded-full shadow-lg flex items-center gap-2 border border-white/20 whitespace-nowrap">
+            <span>当前光标：批注 {getCircledNumber(cursorAnnotation.ann.index)}</span>
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              onTouchStart={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              onClick={() => {
+                setActiveSheetAnn({
+                  isOpen: true,
+                  index: cursorAnnotation.ann.index,
+                  quotedText: cursorAnnotation.ann.text,
+                  comment: cursorAnnotation.ann.comment,
+                  isExisting: true,
+                  annId: cursorAnnotation.ann.id,
+                });
+              }}
+              className="underline font-bold hover:text-amber-100"
+            >
+              查看/修改
+            </button>
+          </div>
         </div>
       )}
 
